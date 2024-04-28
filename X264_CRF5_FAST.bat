@@ -1,6 +1,6 @@
 @echo off
 
-chcp 65001 > nul
+chcp 932 > nul
 
 PowerShell -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath '%~dp0' -Recurse | Unblock-File"
 
@@ -21,6 +21,6 @@ set param=^
     -c:a aac -ab 256000 -af "channelmap=channel_layout=stereo,aresample=48000:resampler=soxr"^
     [OUTPUT(_x264_c5fast.mp4)]
 
-start /wait /b "%~n0" powershell.exe -ExecutionPolicy RemoteSigned -File "Script\FFmpeg_PowerShell_GUI.ps1" %* -Parameters "%param%"
+start /wait /b "%~n0" powershell.exe -ExecutionPolicy RemoteSigned -File "%~dp0\Script\FFmpeg_PowerShell_GUI.ps1" %* -Parameters "%param%"
 
 if %errorlevel% neq 0 pause

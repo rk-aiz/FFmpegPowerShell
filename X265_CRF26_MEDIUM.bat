@@ -14,12 +14,12 @@ set param=^
  -maxrate 20M^
  -bufsize 20M^
  -preset medium^
- -crf 18^
+ -crf 26^
  -pix_fmt yuv420p^
  -bf 2^
  -movflags +faststart^
  -c:a aac -ab 256000 -af "channelmap=channel_layout=stereo,aresample=48000:resampler=soxr"^
- [OUTPUT(_x265_c18medium.mp4)]
+ [OUTPUT(_x265_c26medium.mp4)]
 
 start /wait /b "%~n0" powershell.exe -ExecutionPolicy RemoteSigned -File "%~dp0\Script\FFmpeg_PowerShell_GUI.ps1" %* -Parameters "%param%"
 
