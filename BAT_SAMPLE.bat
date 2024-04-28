@@ -1,6 +1,8 @@
 @echo off
 
-chcp 932 > nul
+chcp 65001 > nul
+
+PowerShell -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath '%~dp0' -Recurse | Unblock-File"
 
 set param=^
  -hide_banner^
@@ -22,3 +24,5 @@ set param=^
 start /wait /b "%~n0" powershell.exe -ExecutionPolicy RemoteSigned -File "Script\FFmpeg_PowerShell_GUI.ps1" %* -Parameters "%param%"
 
 if %errorlevel% neq 0 pause
+
+pause

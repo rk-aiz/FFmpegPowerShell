@@ -1,6 +1,8 @@
 @echo off
 
-chcp 932 > nul
+chcp 65001 > nul
+
+PowerShell -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath '%~dp0' -Recurse | Unblock-File"
 
 set param=^
  -hide_banner^

@@ -21,6 +21,8 @@ param(
 
 Set-Location -LiteralPath $PSScriptRoot
 
+Write-Host "UTF-8 with BOM のテキスト"
+
 # ------------------------------------
 # Internal parameter variables
 # ------------------------------------
