@@ -2,7 +2,7 @@
 
 Displaying ffmpeg progress in GUI
 
-![Alt text](sample.png "FFmpegPowerShell")
+<img src="sample.png" width="50%" />
 
 Required
 --------------
