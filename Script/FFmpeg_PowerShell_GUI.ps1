@@ -27,7 +27,7 @@ Set-Location -LiteralPath $PSScriptRoot
 $global:path = $path.trim("`'")
 $global:parameters = $Parameters
 
-$OUTPUT_DIRECTORY = "Encode"
+$OUTPUT_DIRECTORY = "D:\Encode"
 $OPTION_DIRECTORY = ""
 $OUTPUT_EXTENSION = ".mkv"
 
@@ -331,7 +331,7 @@ if ($Error.Count -gt 0) {
     exit 1
 }
 
-$ffmpegProcess = New-Object HelperClasses.ProcessInfo($FFMPEG_FILE, ("-y $($replacedParams.GetText(" "))"), $NO_REDIRECT)
+$ffmpegProcess = New-Object HelperClasses.ProcessInfo($FFMPEG_FILE, ("-y -nostdin $($replacedParams.GetText(" "))"), $NO_REDIRECT)
 
 $ffprobeParams = @(
     '-v error',
@@ -486,10 +486,12 @@ $runspaceScript = {
 
     $viewModel.CurrentOperation = $currentOperation
 
-    while (-not $ffmpegTask.Wait(0)) {
-
-        foreach ($receivedData in ($ffmpegProcess.ReceivedDataQueue.GetConsumingEnumerable()))
+    while (-not $ffmpegTask.Wait(100)) {
+        #if ($cTokenSource -ne $null) { $cTokenSource.Dispose() }
+        #$cTokenSource = New-Object System.Threading.CancellationTokenSource(1000)
+        foreach ($receivedData in ($ffmpegProcess.ReceivedDataQueue.GetConsumingEnumerable(<#$cTokenSource.Token#>)))
         {
+            [ConsoleHelper]::WriteLine($receivedData.Data)
             switch ($receivedData.Type)
             {
                 ('StdOut') { 
@@ -654,8 +656,11 @@ $runspaceScript = {
             }
         }
     }
+
     $syncData.exitCode = $ffmpegTask.GetAwaiter().GetResult()
     $ffmpegProcess.Dispose()
+
+    [ConsoleHelper]::Log("FFMPEG EXIT CODE : $($syncData.exitCode)")
 
     if (($syncData.exitCode -eq 0) -and ($syncData.termination -eq $false)) {
         
@@ -669,6 +674,8 @@ $runspaceScript = {
         if ($viewModel.OpenExplorer) {
             $syncData.openExplorer.Invoke($syncData.output)
         }
+    } else {
+        $viewModel.ProgressState = [ProgressWindow.ProgressState]::None
     }
 
     if (($viewModel.AutoClose -eq $true) -or ($syncData.termination -eq $true)) {
