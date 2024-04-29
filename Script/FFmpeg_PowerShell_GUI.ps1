@@ -491,7 +491,6 @@ $runspaceScript = {
         #$cTokenSource = New-Object System.Threading.CancellationTokenSource(1000)
         foreach ($receivedData in ($ffmpegProcess.ReceivedDataQueue.GetConsumingEnumerable(<#$cTokenSource.Token#>)))
         {
-            [ConsoleHelper]::WriteLine($receivedData.Data)
             switch ($receivedData.Type)
             {
                 ('StdOut') { 
