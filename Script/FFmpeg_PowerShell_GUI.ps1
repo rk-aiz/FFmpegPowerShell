@@ -29,7 +29,7 @@ Set-Location -LiteralPath $PSScriptRoot
 $global:path = $path.trim("`'")
 $global:parameters = $Parameters
 
-$OUTPUT_DIRECTORY = ""
+$OUTPUT_DIRECTORY = "D:\Encode"
 $OPTION_DIRECTORY = ""
 $OUTPUT_EXTENSION = ".mkv"
 
