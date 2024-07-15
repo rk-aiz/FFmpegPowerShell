@@ -14,9 +14,11 @@ param(
     [Parameter()]
     [string] $Parameters,
     [Parameter()]
-    [switch] $StartPaused,
+    [switch] $StartPaused,s
     [Parameter()]
-    [switch] $ForceCompileAssembly = $false
+    [switch] $ForceCompileAssembly = $false,
+    [Parameter()]
+    [int] $GetConsoleTimeout = 10000
 )
 
 Set-Location -LiteralPath $PSScriptRoot
@@ -146,7 +148,7 @@ function showDropWindow {
                 $global:ProcessManagerMode = $true
                 $ProcessList = New-Object System.Collections.Generic.List[System.Diagnostics.Process]
                 foreach ($f in $fileList) {
-                    $proc = Start-Process powershell.exe -PassThru -ArgumentList "-ExecutionPolicy RemoteSigned -File `"$($MyInvocation.ScriptName)`" -path `"$f`" -Parameters `"$($global:parameters)`" -StartPaused"
+                    $proc = Start-Process powershell.exe -PassThru -ArgumentList "-ExecutionPolicy RemoteSigned -File `"$($MyInvocation.ScriptName)`" -path `"$f`" -Parameters `"$($global:parameters)`" -StartPaused -GetConsoleTimeout $($GetConsoleTimeout * $fileList.Count)"
                     Start-Sleep -Milliseconds 200
                     $ProcessList.Add($proc)
                 }
@@ -227,7 +229,7 @@ Try {
 # Get console window and set window title
 $uniqueWindowTitle = New-Guid
 $Host.UI.RawUI.WindowTitle = $uniqueWindowTitle
-$ConsoleWindow = New-Object HelperClasses.WindowHelper($uniqueWindowTitle)
+$ConsoleWindow = New-Object HelperClasses.WindowHelper($uniqueWindowTitle, $GetConsoleTimeout)
 $Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.name
 
 
