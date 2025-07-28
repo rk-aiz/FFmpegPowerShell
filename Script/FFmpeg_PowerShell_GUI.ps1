@@ -1,12 +1,55 @@
 ﻿##
-# FFMPEG GUI Script
+# FFMPEG PowerShell GUI Script
 #
 <#
     .SYNOPSIS
-    Scripts to make ffmpeg easier to use
+    FFmpegの動画エンコード作業を簡略化するための、グラフィカルユーザーインターフェース(GUI)を提供します。
+
+    .DESCRIPTION
+    このPowerShellスクリプトはFFmpegのラッパーとして機能し、動画エンコードをより簡単に行うためのユーザーフレンドリーなGUIを提供します。
+    主な機能は以下の通りです:
+    - 入力ファイルのドラッグ＆ドロップに対応。入力ファイルがパラメータで指定されない場合、ドロップ用のウィンドウが表示されます。
+    - エンコードのステータス、進捗率、残り時間などをリアルタイムで表示するプログレスウィンドウ。
+    - エンコード処理の一時停止、再開、中止をGUIから制御可能。
+    - デフォルトまたはカスタムのFFmpegパラメータをサポート。
+    - パラメータ文字列内の`[INPUT]`や`[OUTPUT]`といったプレースホルダーを自動的に置換。
+    - 出力ファイルが既に存在する場合に、上書き、名前の変更、またはキャンセルを選択するプロンプトを表示。
+    - エンコード中にシステムがスリープするのを防ぐ機能。
+    - 複数のファイルを一度にドロップした場合、ファイルごとに個別のプロセスを起動して処理。
+    - 必要なC#ヘルパーアセンブリをオンザフライで自動的にコンパイル。
+
+    .PARAMETER path
+    エンコードする入力ファイルのパスを指定します。
+    このパラメータを省略した場合、ファイルをドラッグ＆ドロップするためのウィンドウが表示されます。
+
+    .PARAMETER Parameters
+    FFmpegに渡すコマンドラインパラメータを単一の文字列として指定します。
+    省略された場合、スクリプトに定義されているデフォルトのパラメータセットが使用されます。
+    プレースホルダー `[INPUT]` は入力ファイルパスに、`[OUTPUT]` は出力ファイルパスに置換されます。
+    また、`[OUTPUT(.ext)]` の形式で出力ファイルの拡張子を指定することもできます。
+
+    .PARAMETER OutputSourceDirectory
+    このスイッチを指定すると、出力ファイルが入力ファイルと同じディレクトリに作成されます。
+    指定しない場合、スクリプトで定義されたデフォルトの出力ディレクトリに保存されます。
+
+    .PARAMETER StartPaused
+    このスイッチを指定すると、エンコードプロセスが一時停止した状態で開始されます。GUIの再開ボタンをクリックしてエンコードを開始する必要があります。
+
+    .PARAMETER ForceCompileAssembly
+    スクリプトが使用するC#ヘルパーアセンブリを強制的に再コンパイルします。
+
+    .EXAMPLE
+    # 入力ファイルを指定して、デフォルト設定でエンコードを開始する
+    .\FFmpeg_PowerShell_GUI.ps1 -path "C:\videos\input.mp4"
+
+    # カスタムのFFmpegパラメータを指定してエンコードする
+    .\FFmpeg_PowerShell_GUI.ps1
 #>
 
+
 using namespace System.Text.RegularExpressions;
+using namespace ViewModelHelper
+using namespace HelperClasses
 
 param(
     [Parameter()]
@@ -14,11 +57,11 @@ param(
     [Parameter()]
     [string] $Parameters,
     [Parameter()]
-    [switch] $StartPaused,s
+    [switch] $OutputSourceDirectory = $false,
     [Parameter()]
-    [switch] $ForceCompileAssembly = $false,
+    [switch] $StartPaused,
     [Parameter()]
-    [int] $GetConsoleTimeout = 10000
+    [switch] $ForceCompileAssembly = $false
 )
 
 Set-Location -LiteralPath $PSScriptRoot
@@ -29,7 +72,7 @@ Set-Location -LiteralPath $PSScriptRoot
 $global:path = $path.trim("`'")
 $global:parameters = $Parameters
 
-$OUTPUT_DIRECTORY = ""
+$OUTPUT_DIRECTORY = "D:\Encode"
 $OPTION_DIRECTORY = ""
 $OUTPUT_EXTENSION = ".mkv"
 
@@ -82,9 +125,6 @@ $OpenExplorerScript = {
         Start-Process "explorer.exe" ('/select,"{0}"' -f ($filePath))
     }
 }
-
-$CS_SOURCE = "helper.cs"
-$CS_ASSEMBLY = "helper.dll"
 
 # ------------------------------------
 # Helper functions
@@ -146,9 +186,9 @@ function showDropWindow {
             Default
             {   
                 $global:ProcessManagerMode = $true
-                $ProcessList = New-Object System.Collections.Generic.List[System.Diagnostics.Process]
+                    $proc = Start-Process powershell.exe -PassThru -ArgumentList "-ExecutionPolicy RemoteSigned -File `"$($MyInvocation.ScriptName)`" -path `"$f`" -Parameters `"$($global:parameters)`" -StartPaused"
                 foreach ($f in $fileList) {
-                    $proc = Start-Process powershell.exe -PassThru -ArgumentList "-ExecutionPolicy RemoteSigned -File `"$($MyInvocation.ScriptName)`" -path `"$f`" -Parameters `"$($global:parameters)`" -StartPaused -GetConsoleTimeout $($GetConsoleTimeout * $fileList.Count)"
+                    $proc = Start-Process powershell.exe -PassThru -ArgumentList "-ExecutionPolicy RemoteSigned -File `"$($MyInvocation.ScriptName)`" -path `"$f`" -Parameters `"$($global:parameters)`" -StartPaused"
                     Start-Sleep -Milliseconds 200
                     $ProcessList.Add($proc)
                 }
@@ -189,8 +229,8 @@ function checkFilePath {
 # Clear the error
 $Error.Clear()
 
-[Console]::Write("Start time: ")
-[DateTime]::Now
+[Console]::WriteLine("Start time: {0}" -f ([DateTime]::Now))
+
 
 # ------------------------------------
 # Check required external files
@@ -199,37 +239,105 @@ $Error.Clear()
 # ffprobe.exe is option
 # ------------------------------------
 
-# if [$CS_SOURCE] is newer than [$CS_ASSEMBLY], rebuild assembly.
-if ((Test-Path $CS_SOURCE) -and (Test-Path $CS_ASSEMBLY)) {
-    if ((Get-ItemProperty $CS_SOURCE).LastWriteTime -gt (Get-ItemProperty $CS_ASSEMBLY).LastWriteTime) {
-        Write-Host ("Since [$CS_SOURCE] has been updated, recompilation is required.")
-        $ForceCompileAssembly = $true
+
+# ============================================================================ #
+# Check assemblies and compile C# source code.
+Function Test-Assembly {
+    param($sourcePath, $assemblyPath, $refAssemblies, $classNameToBeVerified, $forceCompileAssembly = $false)
+    # Check if [$CS_SOURCE] exist and updated.
+    if ((Test-Path $sourcePath) -and (Test-Path $assemblyPath)) {
+        if ((Get-ItemProperty $sourcePath).LastWriteTime -gt (Get-ItemProperty $assemblyPath).LastWriteTime) {
+            Write-Host ("Since [$sourcePath] has been updated, recompilation is required.")
+            $forceCompileAssembly = $true
+        }
+    }
+    # Compile [$CS_SOURCE] if needed.
+    Try {
+        if ($forceCompileAssembly) {
+            throw [System.Management.Automation.RuntimeException] "Request compile assembly.(1)"
+        }
+        
+        if (Test-Path $assemblyPath) {
+            $asm = [Reflection.Assembly]::LoadFile((Resolve-Path $assemblyPath))
+            $null = $asm.GetType($classNameToBeVerified, $true, $true) # 第2引数: throwOnError=false, 第3引数: ignoreCase=true
+        } else {
+            throw [System.Management.Automation.RuntimeException] "Request compile assembly.(2)"
+        }
+    } Catch [System.Management.Automation.RuntimeException] {
+        Write-Host "$($Error.Exception.message) Compile [$sourcePath] to [$assemblyPath]." -ForegroundColor Yellow
+
+        $Error.Clear()
+        $null = Add-Type -Path $sourcePath -OutputAssembly $assemblyPath -ReferencedAssemblies $refAssemblies -ErrorAction Stop -PassThru
     }
 }
-# Compile [$CS_SOURCE] if needed.
-Try {
-    if ($ForceCompileAssembly) {
-        throw [System.Management.Automation.RuntimeException] "Request compile assembly."
-    }
-    
-    if (Test-Path $CS_ASSEMBLY) {
-        [void][Reflection.Assembly]::LoadFile((Resolve-Path $CS_ASSEMBLY))
-        [void][DropWindow.MainWindow]
-    } else {
-        throw [System.Management.Automation.RuntimeException] "Request compile assembly."
-    }
-} Catch [System.Management.Automation.RuntimeException] {
-    $Error.Clear()
-    $null = Add-Type -Path $CS_SOURCE -OutputAssembly $CS_ASSEMBLY -ReferencedAssemblies PresentationFramework, PresentationCore, WindowsBase, System.Xaml -ErrorAction Stop -PassThru
-}
+
+# ============================================================================ #
+# HelperClasses
+$CS_SOURCE = "assemblies/helperclasses.cs"
+$CS_ASSEMBLY = "assemblies/helperclasses.dll"
+$FORCE_COMPILE_ASSEMBLY = $false
+$REF_ASSEMBLIES = @('WindowsBase', 'PresentationFramework', 'PresentationCore', 'System.Xaml', 'System.Runtime.InteropServices')
+$CLASS_NAME_TO_BE_VERIFIED = "HelperClasses.ConsoleHelper"
+Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
+
+
+# ============================================================================ #
+# ViewModelHelper
+$CS_SOURCE = "assemblies/viewmodelhelper.cs"
+$CS_ASSEMBLY = "assemblies/viewmodelhelper.dll"
+$FORCE_COMPILE_ASSEMBLY = $false
+$REF_ASSEMBLIES = @('WindowsBase', 'PresentationFramework', 'PresentationCore', 'System.Xaml', 'System.Runtime.InteropServices')
+$CLASS_NAME_TO_BE_VERIFIED = "ViewModelHelper.ViewModelBase"
+Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
+
+
+# ============================================================================ #
+# ProgressWindow
+$CS_SOURCE = "assemblies/progresswindow.cs"
+$CS_ASSEMBLY = "assemblies/progresswindow.dll"
+$FORCE_COMPILE_ASSEMBLY = $false
+$REF_ASSEMBLIES = @(
+    'assemblies/helperclasses.dll', 
+    'assemblies/viewmodelhelper.dll', 
+    'WindowsBase', 
+    'PresentationFramework', 
+    'PresentationCore', 
+    'System.Xaml', 
+    'System.Runtime.InteropServices'
+)
+$CLASS_NAME_TO_BE_VERIFIED = "ProgressWindow.MainWindow"
+Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
+
+# ============================================================================ #
+# dropwindow
+$CS_SOURCE = "assemblies/dropwindow.cs"
+$CS_ASSEMBLY = "assemblies/dropwindow.dll"
+$FORCE_COMPILE_ASSEMBLY = $false
+$REF_ASSEMBLIES = @(
+    'assemblies/viewmodelhelper.dll', 
+    'WindowsBase', 
+    'PresentationFramework', 
+    'PresentationCore', 
+    'System.Xaml', 
+    'System.Runtime.InteropServices'
+)
+$CLASS_NAME_TO_BE_VERIFIED = "DropWindow.MainWindow"
+Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
+
+# ============================================================================ #
+# JobHelper
+$CS_SOURCE = "assemblies/jobhelper.cs"
+$CS_ASSEMBLY = "assemblies/jobhelper.dll"
+$FORCE_COMPILE_ASSEMBLY = $false
+$REF_ASSEMBLIES = @(
+    'System.Runtime.InteropServices'
+)
+$CLASS_NAME_TO_BE_VERIFIED = "JobHelper.CpuLimitedJob"
+Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
+
 
 ######     From here, use [ConsoleHelper] instead of [Write-Host].     ######
 
-
-# Get console window and set window title
-$uniqueWindowTitle = New-Guid
-$Host.UI.RawUI.WindowTitle = $uniqueWindowTitle
-$ConsoleWindow = New-Object HelperClasses.WindowHelper($uniqueWindowTitle, $GetConsoleTimeout)
 $Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.name
 
 
@@ -240,20 +348,18 @@ try {
     $checkFfmpegProc = Start-Process $FFMPEG_FILE ('-version') -NoNewWindow -PassThru
 } catch {
     [ConsoleHelper]::Error("Error : ffmpeg.exe was not found.", 1, 5)
+
+
     exit 2
 }
-
-
 $global:ProcessManagerMode = $false
 
 # Show file drop dialog.
+
 while ((checkFilePath $global:path) -ne $true) {
 
-    $ConsoleWindow.HideConsole()
 
     $result = showDropWindow $myInvocation.MyCommand.name
-
-    $ConsoleWindow.ShowConsole()
 
     if ($result -ne $true) {
         [ConsoleHelper]::Error("Script execution has been aborted.", 1)
@@ -283,6 +389,9 @@ if ($matchOutputWithExt.Success) {
 
 # Resolve path for the output file
 if ([String]::IsNullOrEmpty($global:output)) {
+    if ($OutputSourceDirectory) {
+        $OUTPUT_DIRECTORY = [System.IO.Path]::GetDirectoryName($global:path)
+    }
     $global:output = ResolveOutputPath $global:path $OUTPUT_EXTENSION $OUTPUT_DIRECTORY $OPTION_DIRECTORY
 }
 
@@ -333,7 +442,9 @@ if ($Error.Count -gt 0) {
     exit 1
 }
 
-$ffmpegProcess = New-Object HelperClasses.ProcessInfo($FFMPEG_FILE, ("-y -nostdin $($replacedParams.GetText(" "))"), $NO_REDIRECT)
+#-nostdin Quitのために消したが、何のためにつけたのか
+# → ffmpeg をバックグラウンドのプロセスで実行する時は -nostdinオプションを追加する。Invalid data found when processing input対策？
+$ffmpegProcess = New-Object HelperClasses.ProcessInfo($FFMPEG_FILE, ("-y $($replacedParams.GetText(" "))"), $NO_REDIRECT)
 
 $ffprobeParams = @(
     '-v error',
@@ -365,17 +476,6 @@ $syncData = [HashTable]::Synchronized(@{
 $viewModel = New-Object ProgressWindow.ProgressViewModel
 
 # Create DelegateCommand for command bindings
-$showPromptCommand = New-Object DelegateCommand
-$showPromptCommand.ExecuteHandler = {
-    param($param)
-    if ([bool]$param) {
-        $ConsoleWindow.ShowConsole($false)
-    }else {
-        $ConsoleWindow.HideConsole()
-    }
-}
-$viewModel.ShowPromptCommand = $showPromptCommand
-
 $processControlCommand = New-Object DelegateCommand
 $processControlCommand.ExecuteHandler = {
     param($param)
@@ -698,10 +798,32 @@ $runspaceScript = {
 
 try{
     $progressWindow = New-Object ProgressWindow.MainWindow($viewModel)
+    $progressWindow.Add_Loaded({
+        <# レジストリパスと値の名前
+        $regPath = "HKCU:\SOFTWARE\Microsoft\Windows\DWM"
+        $regName = "AccentColor"
+
+        # 値を取得
+        $accentValue = Get-ItemProperty -Path $regPath -Name $regName | Select-Object -ExpandProperty $regName
+
+        # ARGB値を分解（DWORD形式なので逆順）
+        $hex = '{0:X8}' -f $accentValue
+        $alpha = $hex.Substring(0,2)
+        $blue  = $hex.Substring(2,2)
+        $green = $hex.Substring(4,2)
+        $red   = $hex.Substring(6,2)
+
+        # RGBとして表示
+        #Write-Host ("Accent Color (RGB): R=$red, G=$green, B=$blue")
+        #>
+    
+    })
 } catch {
     $Error
     exit 1
 }
+
+
 
 # Create and setup runspace
 $Runspace = [RunSpaceFactory]::CreateRunspace($Host)
@@ -718,9 +840,6 @@ $PowerShell.Runspace = $Runspace
 
 $IASyncResult = $PowerShell.BeginInvoke()
 
-# Hide console
-$viewModel.ShowPromptCommand.Execute($false)
-
 # Show WPF window
 $result = $false
 try{
@@ -731,7 +850,6 @@ try{
 
 if (($Error.Count -gt 0) -or ($result -ne $true)) {
     $processExitCommand.Execute($null)
-    $viewModel.ShowPromptCommand.Execute($true)
 }
 
 if($IASyncResult.AsyncWaitHandle.WaitOne()){
@@ -741,8 +859,8 @@ if($IASyncResult.AsyncWaitHandle.WaitOne()){
 
 if (($syncData.exitCode -eq 0) -and (Test-Path -LiteralPath ($global:output)) ) {
     Start-Sleep 1
+    $viewModel.ShowPromptCommand.Execute($true)
     exit 0
 } else {
-    $viewModel.ShowPromptCommand.Execute($true)
     exit 1
 }
