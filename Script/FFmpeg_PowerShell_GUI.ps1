@@ -97,6 +97,7 @@ $FFMPEG_PARAMETERS = @'
 $INPUT_PATTERN = "\[INPUT\]"
 $OUTPUT_WITH_EXT_PATTERN = "\[OUTPUT\((.*\..+)\)\]"
 $OUTPUT_PATTERN = "\[OUTPUT\]"
+$PROCESSOR_COUNT_PATTERN = "\[PROCESSOR_COUNT\]"
 $REGEX_OPT = [Text.RegularExpressions.RegexOptions]::IgnoreCase
 
 $TASK_NAME = "$([System.IO.Path]::GetFileName($global:path)) - $($myInvocation.MyCommand.name)"
@@ -271,13 +272,47 @@ Function Test-Assembly {
     }
 }
 
+
+# ============================================================================ #
+# DevLog
+$CS_SOURCE = "assemblies/DevLog.cs"
+$CS_ASSEMBLY = "assemblies/DevLog.dll"
+$FORCE_COMPILE_ASSEMBLY = $false
+$REF_ASSEMBLIES = @('System.Management.Automation', 'System.Runtime.InteropServices')
+$CLASS_NAME_TO_BE_VERIFIED = "DevLog"
+Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
+
+
 # ============================================================================ #
 # HelperClasses
 $CS_SOURCE = "assemblies/helperclasses.cs"
 $CS_ASSEMBLY = "assemblies/helperclasses.dll"
 $FORCE_COMPILE_ASSEMBLY = $false
-$REF_ASSEMBLIES = @('WindowsBase', 'PresentationFramework', 'PresentationCore', 'System.Xaml', 'System.Runtime.InteropServices')
+$REF_ASSEMBLIES = @(
+    'assemblies/DevLog.dll', 
+    'WindowsBase', 
+    'PresentationFramework', 
+    'PresentationCore', 
+    'System.Xaml', 
+    'System.Runtime.InteropServices'
+)
 $CLASS_NAME_TO_BE_VERIFIED = "HelperClasses.ConsoleHelper"
+Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
+
+
+# ============================================================================ #
+# ThemeHelper
+$CS_SOURCE = "assemblies/themehelper.cs"
+$CS_ASSEMBLY = "assemblies/themehelper.dll"
+$FORCE_COMPILE_ASSEMBLY = $false
+$REF_ASSEMBLIES = @(
+    'WindowsBase', 
+    'PresentationFramework', 
+    'PresentationCore', 
+    'System.Xaml', 
+    'System.Runtime.InteropServices'
+)
+$CLASS_NAME_TO_BE_VERIFIED = "ThemeHelper.ThemeBase"
 Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
 
 
@@ -298,6 +333,7 @@ $CS_ASSEMBLY = "assemblies/progresswindow.dll"
 $FORCE_COMPILE_ASSEMBLY = $false
 $REF_ASSEMBLIES = @(
     'assemblies/helperclasses.dll', 
+    "assemblies/themehelper.dll",
     'assemblies/viewmodelhelper.dll', 
     'WindowsBase', 
     'PresentationFramework', 
@@ -339,6 +375,25 @@ Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $
 ######     From here, use [ConsoleHelper] instead of [Write-Host].     ######
 
 $Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.name
+[DevLog]::WriteLine("Debugger is active.")
+
+# Load custom fonts
+try {
+    $interFont = [FontHelper]::LoadFont("Inter", (Resolve-Path -LiteralPath "Inter-VariableFont_opsz,wght.ttf"))
+    [ProgressWindow.Theme]::I.LogoFontFamily = $interFont
+    #[ProgressWindow.Theme]::I.MonospaceFontFamily =$interFont
+} catch {
+    [DevLog]::WriteLine($_)
+}
+
+try {
+    $notoFont = [FontHelper]::LoadFont("Noto Sans JP", (Resolve-Path -LiteralPath "NotoSansJP-VariableFont_wght.ttf"))
+    [ProgressWindow.Theme]::I.MainFontFamily = $notoFont
+} catch {
+    [DevLog]::WriteLine($_)
+}
+
+
 
 
 # check ffmpeg.exe
@@ -432,6 +487,7 @@ if ($matchOutputWithExt.Success) {
 } else {
     $replacedParams.Replace($OUTPUT_PATTERN, "`"$($global:output)`"", $REGEX_OPT)
 }
+$replacedParams.Replace($PROCESSOR_COUNT_PATTERN, [System.Environment]::ProcessorCount, $REGEX_OPT)
 
 [ConsoleHelper]::Info("######    Encode parameters    ######", 1)
 [ConsoleHelper]::Info($replacedParams.GetText("`n"), 1, 3)
@@ -585,6 +641,17 @@ $runspaceScript = {
     $startTime = Get-Date
 
     $ffmpegTask = $ffmpegProcess.Start()
+
+    <#
+    # CPU使用率上限設定
+    $job = New-Object JobHelper.ThrottledJobCpuController
+    [System.Diagnostics.Process]$proc = $null
+    if ($ffmpegProcess.TryGetProcess([ref]$proc)) {
+        #プロセスに 50% 上限を設定
+        $job.AssignProcess($proc)
+        $job.RequestRate(50)
+    }
+    #>
 
     $viewModel.CurrentOperation = $currentOperation
 
@@ -798,32 +865,10 @@ $runspaceScript = {
 
 try{
     $progressWindow = New-Object ProgressWindow.MainWindow($viewModel)
-    $progressWindow.Add_Loaded({
-        <# レジストリパスと値の名前
-        $regPath = "HKCU:\SOFTWARE\Microsoft\Windows\DWM"
-        $regName = "AccentColor"
-
-        # 値を取得
-        $accentValue = Get-ItemProperty -Path $regPath -Name $regName | Select-Object -ExpandProperty $regName
-
-        # ARGB値を分解（DWORD形式なので逆順）
-        $hex = '{0:X8}' -f $accentValue
-        $alpha = $hex.Substring(0,2)
-        $blue  = $hex.Substring(2,2)
-        $green = $hex.Substring(4,2)
-        $red   = $hex.Substring(6,2)
-
-        # RGBとして表示
-        #Write-Host ("Accent Color (RGB): R=$red, G=$green, B=$blue")
-        #>
-    
-    })
 } catch {
     $Error
     exit 1
 }
-
-
 
 # Create and setup runspace
 $Runspace = [RunSpaceFactory]::CreateRunspace($Host)

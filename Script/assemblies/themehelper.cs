@@ -90,7 +90,7 @@ namespace ThemeHelper
         }
 
         // モノスペース用フォントファミリー
-        private FontFamily _monospaceFontFamily = new FontFamily("Consolas");
+        private FontFamily _monospaceFontFamily = new FontFamily("Mono");
         public FontFamily MonospaceFontFamily
         {
             get { return _monospaceFontFamily; }
