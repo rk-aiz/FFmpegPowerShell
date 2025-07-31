@@ -168,7 +168,7 @@ function showDropWindow {
     param([string]$caption)
 
     $DropWindowViewModel = New-Object DropWindow.DropWindowViewModel
-    $DropWindowViewModel.Title = $caption
+    $DropWindowViewModel.Title = $captions
 
     $dropFilesCommand = New-Object DelegateCommand
     $dropFilesCommand.ExecuteHandler = {
@@ -201,6 +201,7 @@ function showDropWindow {
     $DropWindowViewModel.DropFilesCommand = $dropFilesCommand
 
     $FileDropWindow = New-Object DropWindow.MainWindow($DropWindowViewModel)
+    $FileDropWindow.Icon = $iconFrame
     return $FileDropWindow.ShowDialog()
 }
 
@@ -267,6 +268,14 @@ Function Test-Assembly {
     } Catch [System.Management.Automation.RuntimeException] {
         Write-Host "$($Error.Exception.message) Compile [$sourcePath] to [$assemblyPath]." -ForegroundColor Yellow
 
+        for ($i = 0; $i -lt $refAssemblies.Count; $i++) {
+            if (Test-Path -LiteralPath $refAssemblies[$i]) {
+
+                $refAssemblies[$i] = Resolve-Path -LiteralPath $refAssemblies[$i]
+                Write-Host $refAssemblies[$i]
+            }
+        }
+
         $Error.Clear()
         $null = Add-Type -Path $sourcePath -OutputAssembly $assemblyPath -ReferencedAssemblies $refAssemblies -ErrorAction Stop -PassThru
     }
@@ -275,35 +284,33 @@ Function Test-Assembly {
 
 # ============================================================================ #
 # DevLog
-$CS_SOURCE = "assemblies/DevLog.cs"
-$CS_ASSEMBLY = "assemblies/DevLog.dll"
+$CS_SOURCE = "assemblies\DevLog.cs"
+$CS_ASSEMBLY = "assemblies\DevLog.dll"
 $FORCE_COMPILE_ASSEMBLY = $false
 $REF_ASSEMBLIES = @('System.Management.Automation', 'System.Runtime.InteropServices')
 $CLASS_NAME_TO_BE_VERIFIED = "DevLog"
 Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
 
-
 # ============================================================================ #
 # HelperClasses
-$CS_SOURCE = "assemblies/helperclasses.cs"
-$CS_ASSEMBLY = "assemblies/helperclasses.dll"
+$CS_SOURCE = "assemblies\helperclasses.cs"
+$CS_ASSEMBLY = "assemblies\helperclasses.dll"
 $FORCE_COMPILE_ASSEMBLY = $false
 $REF_ASSEMBLIES = @(
-    'assemblies/DevLog.dll', 
     'WindowsBase', 
     'PresentationFramework', 
     'PresentationCore', 
     'System.Xaml', 
-    'System.Runtime.InteropServices'
+    'System.Runtime.InteropServices',
+    'assemblies\DevLog.dll'
 )
 $CLASS_NAME_TO_BE_VERIFIED = "HelperClasses.ConsoleHelper"
 Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
 
-
 # ============================================================================ #
 # ThemeHelper
-$CS_SOURCE = "assemblies/themehelper.cs"
-$CS_ASSEMBLY = "assemblies/themehelper.dll"
+$CS_SOURCE = "assemblies\themehelper.cs"
+$CS_ASSEMBLY = "assemblies\themehelper.dll"
 $FORCE_COMPILE_ASSEMBLY = $false
 $REF_ASSEMBLIES = @(
     'WindowsBase', 
@@ -315,26 +322,24 @@ $REF_ASSEMBLIES = @(
 $CLASS_NAME_TO_BE_VERIFIED = "ThemeHelper.ThemeBase"
 Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
 
-
 # ============================================================================ #
 # ViewModelHelper
-$CS_SOURCE = "assemblies/viewmodelhelper.cs"
-$CS_ASSEMBLY = "assemblies/viewmodelhelper.dll"
+$CS_SOURCE = "assemblies\viewmodelhelper.cs"
+$CS_ASSEMBLY = "assemblies\viewmodelhelper.dll"
 $FORCE_COMPILE_ASSEMBLY = $false
 $REF_ASSEMBLIES = @('WindowsBase', 'PresentationFramework', 'PresentationCore', 'System.Xaml', 'System.Runtime.InteropServices')
 $CLASS_NAME_TO_BE_VERIFIED = "ViewModelHelper.ViewModelBase"
 Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
 
-
 # ============================================================================ #
 # ProgressWindow
-$CS_SOURCE = "assemblies/progresswindow.cs"
-$CS_ASSEMBLY = "assemblies/progresswindow.dll"
+$CS_SOURCE = "assemblies\progresswindow.cs"
+$CS_ASSEMBLY = "assemblies\progresswindow.dll"
 $FORCE_COMPILE_ASSEMBLY = $false
 $REF_ASSEMBLIES = @(
-    'assemblies/helperclasses.dll', 
-    "assemblies/themehelper.dll",
-    'assemblies/viewmodelhelper.dll', 
+    'assemblies\helperclasses.dll', 
+    "assemblies\themehelper.dll",
+    'assemblies\viewmodelhelper.dll', 
     'WindowsBase', 
     'PresentationFramework', 
     'PresentationCore', 
@@ -346,24 +351,24 @@ Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $
 
 # ============================================================================ #
 # dropwindow
-$CS_SOURCE = "assemblies/dropwindow.cs"
-$CS_ASSEMBLY = "assemblies/dropwindow.dll"
+$CS_SOURCE = "assemblies\dropwindow.cs"
+$CS_ASSEMBLY = "assemblies\dropwindow.dll"
 $FORCE_COMPILE_ASSEMBLY = $false
 $REF_ASSEMBLIES = @(
-    'assemblies/viewmodelhelper.dll', 
+    'assemblies\viewmodelhelper.dll',
     'WindowsBase', 
     'PresentationFramework', 
     'PresentationCore', 
     'System.Xaml', 
-    'System.Runtime.InteropServices'
+    'System.Runtime.InteropServices' 
 )
 $CLASS_NAME_TO_BE_VERIFIED = "DropWindow.MainWindow"
 Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
 
 # ============================================================================ #
 # JobHelper
-$CS_SOURCE = "assemblies/jobhelper.cs"
-$CS_ASSEMBLY = "assemblies/jobhelper.dll"
+$CS_SOURCE = "assemblies\jobhelper.cs"
+$CS_ASSEMBLY = "assemblies\jobhelper.dll"
 $FORCE_COMPILE_ASSEMBLY = $false
 $REF_ASSEMBLIES = @(
     'System.Runtime.InteropServices'
@@ -376,6 +381,18 @@ Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $
 
 $Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.name
 [DevLog]::WriteLine("Debugger is active.")
+
+
+
+# Load icon
+$icoPath = Join-Path (Get-Location) "icon.ico"
+[System.Windows.Media.Imaging.BitmapFrame]$iconFrame = $null
+if (Test-Path $icoPath) {
+    $uri = [System.Uri]::new($icoPath, [System.UriKind]::Absolute)
+    $iconFrame = [System.Windows.Media.Imaging.BitmapFrame]::Create($uri)
+    $iconFrame | Format-List PixelWidth, PixelHeight
+}
+
 
 # Load custom fonts
 try {
@@ -433,7 +450,7 @@ if (-not ([String]::IsNullOrWhiteSpace($Parameters))) {
     $FFMPEG_PARAMETERS = $Parameters
 }
 
-# create parameter object
+# create parameter(parameter of ffmpeg) object
 $paramsObj = New-Object HelperClasses.CommentOutText($FFMPEG_PARAMETERS)
 
 # check keyword of extension replacer
@@ -560,11 +577,11 @@ $processExitCommand.ExecuteHandler = {
     $viewModel.Busy = $true
     $progressWindow.DoEvents()
 
-    [System.Diagnostics.Process]$process = $null
-    if ($ffmpegProcess.TryGetProcess([ref]$process)) {
-        $streamWriter = $process.StandardInput
-        if ($streamWriter -ne $null) {
-            $streamWriter.WriteLine("q") # Send q as an input to the ffmpeg process window making it stop.
+    [System.Diagnostics.Process]$proc = $null
+    if ($ffmpegProcess.TryGetProcess([ref]$proc)) {
+
+        if ((-not $proc.HasExited) -and $proc.StandardInput -ne $null) {
+            $proc.StandardInput.WriteLine("q") # Send q as an input to the ffmpeg process window making it stop.
 
             if ($ffmpegProcess.IsSuspended) {
                 $ffmpegProcess.Resume()
@@ -613,262 +630,18 @@ $viewModel.OpenExplorer = $OPEN_FOLDER_ENCODED
 $viewModel.PreventSleep = $PREVENT_SLEEP
 $viewModel.EnableActiveAnimation = $ENABLE_ACTIVE_ANIMATION
 
-# ------------------------------------
-# Runspace execution
-# ------------------------------------
-# Handle stderr output from the ffmpeg process
-$runspaceScript = {
-    param($PSHost, $taskName, $StartPaused)
-
-    $timePattern = "time=\D*([\d\.:]+)"
-    $fpsPattern = "fps=\D*(\d+)"
-    $framePattern = "frame=\D*(\d+)"
-    $durationPattern = "Duration:\D*([\d\.:]+)"
-    $errorPattern = "Error"
-    $failedPattern = "failed"
-    $isLastError = $false
-    $regexOpt = [Text.RegularExpressions.RegexOptions]::IgnoreCase
-
-    [HelperClasses.ReceivedData]$ffprobeOutput = [HelperClasses.ReceivedData]::Empty
-
-    # [ProgressRecord] is for console progress bar
-    $progressRecord = New-Object System.Management.Automation.ProgressRecord(1, $taskName, 'Initialize')
-    $progressRecord.RecordType = [System.Management.Automation.ProgressRecordType]::Processing
-    $currentOperation = $syncData.path
-    $progressRecord.CurrentOperation = $currentOperation
-
-    $totalDuration = [TimeSpan]::Zero
-    $startTime = Get-Date
-
-    $ffmpegTask = $ffmpegProcess.Start()
-
-    <#
-    # CPU使用率上限設定
-    $job = New-Object JobHelper.ThrottledJobCpuController
-    [System.Diagnostics.Process]$proc = $null
-    if ($ffmpegProcess.TryGetProcess([ref]$proc)) {
-        #プロセスに 50% 上限を設定
-        $job.AssignProcess($proc)
-        $job.RequestRate(50)
-    }
-    #>
-
-    $viewModel.CurrentOperation = $currentOperation
-
-    while (-not $ffmpegTask.Wait(100)) {
-        #if ($cTokenSource -ne $null) { $cTokenSource.Dispose() }
-        #$cTokenSource = New-Object System.Threading.CancellationTokenSource(1000)
-        foreach ($receivedData in ($ffmpegProcess.ReceivedDataQueue.GetConsumingEnumerable(<#$cTokenSource.Token#>)))
-        {
-            switch ($receivedData.Type)
-            {
-                ('StdOut') { 
-                    [ConsoleHelper]::Log($receivedData.Data)
-                    break
-                }
-                ('StdError') {
-                    $data = $receivedData.Data
-
-                    if ($data.Contains('frame=')) {
-
-                        $isLastError = $false
-                        if ($syncData.totalFrames -ne 0) {
-                            # Calculate progress from frame.
-                            $matchFramePettern = [Regex]::Match($data, $framePattern)
-                            $matchFpsPettern = [Regex]::Match($data, $fpsPattern)
-
-                            if ($matchFramePettern.Success -and $matchFpsPettern.Success) {
-
-                                $frame = [Double]::Parse($matchFramePettern.Groups[1].Value)
-                                $fps = [Double]::Parse($matchFpsPettern.Groups[1].Value)
-
-                                $percentComplete = ($frame / $syncData.totalFrames) * 100.0
-
-                                # Calculate estimated time remaining.
-                                if ($fps -gt 1) { 
-                                    $remainingTime = ($syncData.totalFrames - $frame) / $fps
-                                } else {
-                                    $pps = $percentComplete / (((Get-Date) - $startTime).TotalMilliseconds / 1000.0)
-                                    if ($pps -gt 0) {
-                                        $remainingTime = (100.0 - $percentComplete) / $pps
-                                    }
-                                }
-                            }
-
-                        } elseif ($totalDuration.Ticks -ne 0) {
-                            # Calculate progress from time.
-                            $match = [Regex]::Match($data, $timePattern)
-                            if ($match.Success) {
-                                $time = [TimeSpan]::Parse($match.Groups[1].Value)
-                                $percentComplete = ($time.Ticks / $totalDuration.Ticks) * 100.0
-
-                                # Calculate estimated time remaining.
-                                $pps = $percentComplete / (((Get-Date) - $startTime).TotalMilliseconds / 1000.0)
-                                if ($pps -gt 0) {
-                                    $remainingTime = (100.0 - $percentComplete) / $pps
-                                }
-                            }
-                        }
-
-                        # [ProgressRecord] is for displaying a progress bar on the console screen.
-                        $progressRecord.StatusDescription = $data
-                        $progressRecord.PercentComplete = $percentComplete
-                        if ($remainingTime -ne $null) {
-                            $progressRecord.SecondsRemaining = $remainingTime
-                        }
-                        if ($syncData.showConsoleProgress) {
-                            $PSHost.UI.WriteProgress($progressRecord.ActivityId, $progressRecord)
-                            $PSHost.UI.RawUI.WindowTitle = "$($progressRecord.PercentComplete)% $taskName"
-                        }
-
-                        # Set progress values in the ViewModel of the GUI window
-                        $viewModel.StatusDescription = $data
-                        $viewModel.Progress = $percentComplete
-                        $viewModel.ProgressRemaining = [TimeSpan]::FromSeconds($remainingTime)
-                        $viewModel.WindowTitle = "$($progressRecord.PercentComplete)% $taskName"
-
-                        if ($StartPaused) {
-                            [ConsoleHelper]::Info("The process started in paused state")
-                            $StartPaused = $false
-                            $viewModel.BusyMessage = "On pause."
-                            $viewModel.ProcessControlCommand.Execute($true)
-                        } elseif((0 -lt $percentComplete) -and ($syncData.termination -eq $false)) {
-                            
-                            $viewModel.Busy = $false
-
-                            # If progress is 100%, set [RecordType] to Completed.
-                            if (100 -gt $percentComplete) {
-                            
-                                # Set [ProgressState] according to progress
-                                $viewModel.ProgressState = [ProgressWindow.ProgressState]::Normal
-                            } else {
-                                #$viewModel.ProgressState = [ProgressWindow.ProgressState]::Completed
-
-                                # and [ProgressRecord.RecordType]
-                                $progressRecord.RecordType = [System.Management.Automation.ProgressRecordType]::Completed
-                                $PSHost.UI.WriteProgress($progressRecord.ActivityId, $progressRecord)
-                            }
-                        }
-
-                    } elseif ($data.Contains("Duration:")) {
-
-                        $match = [Regex]::Match($data, $durationPattern)
-                        if ($match.Success) {
-                            $totalDuration = [TimeSpan]::Parse($match.Groups[1].Value)
-                        }
-
-                    # Processing other than frame informations
-                    } else {
-
-                        if (([Regex]::Match($data, $errorPattern, $regexOpt).Success) -and ($isLastError -eq $false)) {
-
-                            $isLastError = $true
-                            $message = $(if ($data.Length -gt 45) {
-                                ($data.Substring(0, 40) + "...")
-                            } else {
-                                $data
-                            })
-
-                            $viewModel.BusyMessage = "Errors detected : $message"
-                            $viewModel.Busy = $true
-                            [ConsoleHelper]::Error($data)
-
-                        } elseif (([Regex]::Match($data, $failedPattern, $regexOpt).Success) -and ($isLastError -eq $false)) {
-
-                            $isLastError = $true
-                            $message = $(if ($data.Length -gt 45) {
-                                ($data.Substring(0, 40) + "...")
-                            } else {
-                                $data
-                            })
-
-                            $viewModel.BusyMessage = $message
-                            $viewModel.Busy = $true
-                            [ConsoleHelper]::Error($data)
-
-                        } else {
-                            [ConsoleHelper]::WriteLine($data)
-                        }
-                    }
-                    break
-                }
-            }
-
-            # check ffprobe data
-            if (($ffprobeProcess.ReceivedDataQueue.Count -gt 0) -and $ffprobeProcess.ReceivedDataQueue.TryTake([ref]$ffprobeOutput)) {
-                if ($ffprobeOutput.Type -eq 'StdOut') {
-
-                    $match = [Regex]::Match($ffprobeOutput.Data, "r_frame_rate=(\d+)(/\d+)?")
-                    if ($match.Success) {
-                        if ($match.Groups[1].Success) {
-                            $syncData.framerateNum = [Double]::Parse($match.Groups[1].Value)
-                        }
-
-                        if ($match.Groups[2].Success) {
-                            $syncData.framerateDen = [Double]::Parse($match.Groups[2].Value.Trim('/'))
-                        }
-                    }
-
-                    $match = [Regex]::Match($ffprobeOutput.Data, "duration=([\d\.]+)")
-                    if ($match.Success) {
-                        $syncData.duration = [Double]::Parse($match.Groups[1].Value)
-                    }
-
-                    if (($syncData.duration -ne 0) -and ($syncData.framerateDen -ne 0) -and ($syncData.framerateNum -ne 0)) {
-
-                        [ConsoleHelper]::Log("Duration : $($syncData.duration)")
-                        [ConsoleHelper]::Log("Frame Rate : $($syncData.framerateNum) / $($syncData.framerateDen)")
-                        $syncData.totalFrames = ($syncData.framerateNum / $syncData.framerateDen) * $syncData.duration
-                    }
-                }
-            }
-        }
-    }
-
-    $syncData.exitCode = $ffmpegTask.GetAwaiter().GetResult()
-    $ffmpegProcess.Dispose()
-
-    [ConsoleHelper]::Log("FFMPEG EXIT CODE : $($syncData.exitCode)")
-
-    if (($syncData.exitCode -eq 0) -and ($syncData.termination -eq $false)) {
-        
-        # --- たまに99.9%でプロセスが終了してしまうようなので対策 ※要調査
-        $viewModel.Progress = 100.0
-        # -----------------------------------------------------------------
-        
-        if ($viewModel.AutoPlay) {
-            $syncData.openfile.Invoke($syncData.output)
-        }
-        if ($viewModel.OpenExplorer) {
-            $syncData.openExplorer.Invoke($syncData.output)
-        }
-    } else {
-        $viewModel.ProgressState = [ProgressWindow.ProgressState]::None
-    }
-
-    if (($viewModel.AutoClose -eq $true) -or ($syncData.termination -eq $true)) {
-        Start-Sleep 1
-        $closing = $progressWindow.Close()
-        if (-not ($closing.Wait(1000))) {
-            [ConsoleHelper]::Log("Lost control of the GUI window.", 1)
-            $syncData.exitCode = 1003
-        }
-    }
-
-    foreach ($e in $Error) {
-        if ($e.Exception -isnot [System.OperationCanceledException]) {
-            [ConsoleHelper]::Error($e, 1)
-            $syncData.exitCode = 1
-        }
-    }
-}
-
 try{
     $progressWindow = New-Object ProgressWindow.MainWindow($viewModel)
+    $progressWindow.Icon = $iconFrame
 } catch {
     $Error
     exit 1
 }
+
+# ------------------------------------
+# Runspace execution
+# ------------------------------------
+# Handle stderr output from the ffmpeg process
 
 # Create and setup runspace
 $Runspace = [RunSpaceFactory]::CreateRunspace($Host)
@@ -879,8 +652,10 @@ $Runspace.SessionStateProxy.setVariable("ffprobeProcess", $ffprobeProcess)
 $Runspace.SessionStateProxy.setVariable("progressWindow", $progressWindow)
 $Runspace.SessionStateProxy.setVariable("syncData", $syncData)
 $Runspace.SessionStateProxy.setVariable("viewModel", $viewModel)
+
+$externalScript = Get-Command (Resolve-Path -LiteralPath ".\FormatFfmpegStdout.ps1")
 $PowerShell = [PowerShell]::Create()
-$PowerShell.AddScript($runspaceScript).AddArgument($Host).AddArgument($TASK_NAME).AddArgument($StartPaused)
+$PowerShell.AddCommand($externalScript).AddArgument($Host).AddArgument($TASK_NAME).AddArgument($StartPaused)
 $PowerShell.Runspace = $Runspace
 
 $IASyncResult = $PowerShell.BeginInvoke()
@@ -897,14 +672,16 @@ if (($Error.Count -gt 0) -or ($result -ne $true)) {
     $processExitCommand.Execute($null)
 }
 
-if($IASyncResult.AsyncWaitHandle.WaitOne()){
-    $PowerShell.EndInvoke($IASyncResult)
+try {
+    if ($IASyncResult.AsyncWaitHandle.WaitOne()) {
+        $PowerShell.EndInvoke($IASyncResult)
+    }
+} finally {
     $PowerShell.Dispose()
 }
 
 if (($syncData.exitCode -eq 0) -and (Test-Path -LiteralPath ($global:output)) ) {
     Start-Sleep 1
-    $viewModel.ShowPromptCommand.Execute($true)
     exit 0
 } else {
     exit 1

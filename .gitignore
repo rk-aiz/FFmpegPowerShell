@@ -9,5 +9,6 @@ Script/assemblies/*.dll
 
 *.psd
 *.clip
+*icon.png
 
 *.ttf

@@ -232,67 +232,68 @@ namespace HelperClasses
             if (_disposed) { throw new ObjectDisposedException("\"Dispose\" has already been executed."); }
 
             _eventHandled = new TaskCompletionSource<int>();
+            _process = new Process { StartInfo = _startInfo, EnableRaisingEvents = true };
 
-            using (_process = new Process { StartInfo = _startInfo, EnableRaisingEvents = true })
+            try
             {
-                try
+                if (!_startInfo.UseShellExecute)
                 {
-                    if (!_startInfo.UseShellExecute)
+                    _process.OutputDataReceived += (sender, e) =>
                     {
-                        _process.OutputDataReceived += (sender, e) =>
+                        Task.Run(() =>
                         {
-                            Task.Run(() =>
+                            if (!String.IsNullOrEmpty(e.Data))
                             {
-                                if (!String.IsNullOrEmpty(e.Data))
-                                {
-                                    _receivedData.TryAdd(
-                                        new ReceivedData(
-                                            e.Data,
-                                            ReceivedData.DataType.StdOut
-                                        ),
-                                        System.Threading.Timeout.Infinite
-                                    );
-                                }
-                            });
-                        };
-                        _process.ErrorDataReceived += (sender, e) =>
-                        {
-                            Task.Run(() =>
-                            {
-                                if (!String.IsNullOrEmpty(e.Data))
-                                {
-                                    _receivedData.TryAdd(
-                                        new ReceivedData(
-                                            e.Data,
-                                            ReceivedData.DataType.StdError
-                                        ),
-                                        System.Threading.Timeout.Infinite
-                                    );
-                                }
-                            });
-                        };
-                    }
-                    _process.Exited += (sender, e) =>
-                    {
-                        _receivedData.CompleteAdding();
-                        _eventHandled.TrySetResult(_process.ExitCode);
+                                _receivedData.TryAdd(
+                                    new ReceivedData(
+                                        e.Data,
+                                        ReceivedData.DataType.StdOut
+                                    ),
+                                    System.Threading.Timeout.Infinite
+                                );
+                            }
+                        });
                     };
-                    _process.Start();
-                    if (!_startInfo.UseShellExecute)
+                    _process.ErrorDataReceived += (sender, e) =>
                     {
-                        _process.BeginErrorReadLine();
-                        _process.BeginOutputReadLine();
-                    }
-                    //_process.PriorityClass = ProcessPriorityClass.High;
+                        Task.Run(() =>
+                        {
+                            if (!String.IsNullOrEmpty(e.Data))
+                            {
+                                _receivedData.TryAdd(
+                                    new ReceivedData(
+                                        e.Data,
+                                        ReceivedData.DataType.StdError
+                                    ),
+                                    System.Threading.Timeout.Infinite
+                                );
+                            }
+                        });
+                    };
                 }
-                catch (Exception e)
-                {
-                    throw e;
-                }
-                await _eventHandled.Task;
-            }
 
-            _process = null;
+                _process.Exited += (sender, e) =>
+                {
+                    _receivedData.CompleteAdding();
+                    _eventHandled.TrySetResult(_process.ExitCode);
+                };
+
+                _process.Start();
+
+                if (!_startInfo.UseShellExecute)
+                {
+                    _process.BeginErrorReadLine();
+                    _process.BeginOutputReadLine();
+                }
+                //_process.PriorityClass = ProcessPriorityClass.High;
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+            await _eventHandled.Task;
+
+            //_process = null;
             return _eventHandled.Task.Result;
         }
 

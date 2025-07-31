@@ -388,7 +388,7 @@ namespace ProgressWindow
                 GridRow = 0
             };
 
-            var progressBar = new CustomProgressBar();
+            var progressBar = new CustomProgressBar { BorderThickness = new Thickness(0) };
             Grid.SetRow(progressBar, 1);
             progressBar.SetBinding(CustomProgressBar.SmoothValueProperty, new OneWayBinding("Progress"));
             progressBar.SetBinding(CustomProgressBar.LabelTextProperty, new OneWayBinding("ProgressLabel"));
@@ -2357,7 +2357,7 @@ namespace ProgressWindow
 
         public CustomProgressBar()
         {
-            Margin = new Thickness { Left = 20, Right = 20 };
+            //Margin = new Thickness { Left = 20, Right = 20 };
             VerticalAlignment = VerticalAlignment.Center;
 
             IsVisibleChanged += (s, e) => { UpdateAnimation(); };
@@ -2609,7 +2609,9 @@ namespace ProgressWindow
             progressLabel.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Left);
             progressLabel.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
             progressLabel.SetValue(ForegroundProperty, new TemplateBindingExtension(TextBrushProperty));
-            progressLabel.SetValue(MarginProperty, new Thickness { Left = 10.0 });
+            progressLabel.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+            progressLabel.SetValue(MarginProperty, new Thickness { Left = 10.0,Right = 100.0 });
+            progressLabel.SetValue(ToolTipProperty, new Binding("Text") { RelativeSource = RelativeSource.Self });
 
             var partGlowRect = new FrameworkElementFactory(typeof(Rectangle), GlowingRectTemplateName);
             partGlowRect.SetValue(VisibilityProperty, Visibility.Collapsed);
