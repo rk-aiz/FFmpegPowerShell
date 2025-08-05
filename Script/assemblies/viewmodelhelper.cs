@@ -51,6 +51,21 @@ namespace ViewModelHelper
             if (CanExecuteChanged != null)
                 CanExecuteChanged.Invoke(this, EventArgs.Empty);
         }
+
+        public DelegateCommand(Action<object> execute, Func<object, bool> canExecute = null)
+        {
+            if (null == execute)
+            {
+                throw new ArgumentNullException("execute");
+            }
+            ExecuteHandler = execute;
+            CanExecuteHandler = canExecute;
+        }
+
+        public DelegateCommand()
+        {
+        }
+
     }
 
     public class OneWayBinding : Binding

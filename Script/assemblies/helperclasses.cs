@@ -190,6 +190,8 @@ namespace HelperClasses
             };
 
             IsSuspended = false;
+
+            _process = new Process { StartInfo = _startInfo, EnableRaisingEvents = true };
         }
 
         public void Suspend()
@@ -232,7 +234,6 @@ namespace HelperClasses
             if (_disposed) { throw new ObjectDisposedException("\"Dispose\" has already been executed."); }
 
             _eventHandled = new TaskCompletionSource<int>();
-            _process = new Process { StartInfo = _startInfo, EnableRaisingEvents = true };
 
             try
             {

@@ -15,13 +15,7 @@ $failedPattern = "failed"
 $isLastError = $false
 $regexOpt = [Text.RegularExpressions.RegexOptions]::IgnoreCase
 
-# --- 減衰バネモデル (Damped Spring Model) ---
-# 表示用のFPS。$currentFpsに滑らかに追従する。
-$dampedFps = 0.0
-# バネの硬さ/減衰係数。値が小さいほど滑らか（バネが柔らかい）。
-$dampingFactor = 0.2
-
-[HelperClasses.ReceivedData]$ffprobeOutput = [HelperClasses.ReceivedData]::Empty
+[ReceivedData]$ffprobeOutput = [ReceivedData]::Empty
 
 # [ProgressRecord] is for console progress bar
 $progressRecord = New-Object System.Management.Automation.ProgressRecord(1, $taskName, 'Initialize')
@@ -30,20 +24,19 @@ $currentOperation = $syncData.path
 $progressRecord.CurrentOperation = $currentOperation
 
 $totalDuration = [TimeSpan]::Zero
-$startTime = $interval = Get-Date
-$lastFrame = 0
+$startTime = Get-Date
 $ffmpegTask = $ffmpegProcess.Start()
 
-<#
-# CPU使用率上限設定
-$job = New-Object JobHelper.ThrottledJobCpuController
 [System.Diagnostics.Process]$proc = $null
 if ($ffmpegProcess.TryGetProcess([ref]$proc)) {
-    #プロセスに 50% 上限を設定
-    $job.AssignProcess($proc)
-    $job.RequestRate(50)
+    $syncData.job.AssignProcess($proc)
 }
-#>
+
+# --- 残り時間計算の平滑化用 ---
+$averageFps = 0.0
+$averagePps = 0.0
+# 平滑化係数 (0 < alpha < 1)。小さいほど滑らかになり、過去の値を重視する。
+$alpha = 0.05
 
 $viewModel.CurrentOperation = $currentOperation
 
@@ -72,32 +65,27 @@ while (-not $ffmpegTask.Wait(100)) {
                         if ($matchFramePettern.Success -and $matchFpsPettern.Success) {
 
                             $frame = [double]::Parse($matchFramePettern.Groups[1].Value)
+                            $currentFps = [Double]::Parse($matchFpsPettern.Groups[1].Value)
+
                             $percentComplete = ($frame / $syncData.totalFrames) * 100.0
-                            $elapsedSeconds = ((Get-Date) - $interval).TotalMilliseconds / 1000.0
                             
-                            # --- 減衰バネモデルによる残り時間計算 ---
+                            if ($currentFps -gt 1.0) { 
 
-                            # 1. 生のFPSを計算する (引っ張る側)
-                            $currentFps = if ($elapsedSeconds -gt 0) { ($frame - $lastFrame) / $elapsedSeconds } else { 0 }
+                                # 指数移動平均 (Exponential Moving Average) を使ってFPSを平滑化し、予測の安定性を向上させる
+                                if ($averageFps -eq 0.0) {
+                                    $averageFps = $currentFps
+                                } else {
+                                    $averagePps = ($currentFps * $alpha) + ($averageFps * (1 - $alpha))
+                                }
+                                $remainingTime = ($syncData.totalFrames - $frame) / $averageFps
 
-                            # 2. 減衰バネの計算式を適用し、表示用のFPSを更新する
-                            if ($dampedFps -eq 0.0) {
-                                $dampedFps = $currentFps # 初回はそのまま代入
-                            } else {
-                                # 現在値と目標値の差に減衰係数を掛けて、現在値に加算する
-                                $dampedFps = $dampedFps + (($currentFps - $dampedFps) * $dampingFactor)
-                            }
-
-                            # 3. 滑らかにされた$dampedFpsを使って、残り時間を計算する
-                            $remainingTime = if ($dampedFps -gt 1) {
-                                # 残り時間 = (推定総時間) - (経過時間)
-                                ($syncData.totalFrames - $frame) / $dampedFps
-                            } else {
-                                $null
-                            }
-
-                            $lastFrame = $frame
-                            $interval = Get-Date
+                            } else{ # 1fps未満の場合は完了パーセンテージをもとに計算
+                                #pps : percent per second
+                                $pps = $percentComplete / (((Get-Date) - $startTime).TotalMilliseconds / 1000.0)
+                                if ($pps -gt 0) {
+                                    $remainingTime = (100.0 - $percentComplete) / $pps
+                                }
+                            }                  
                         }
 
                     } elseif ($totalDuration.Ticks -ne 0) { #Frameが取得できないときのFallback
@@ -112,7 +100,7 @@ while (-not $ffmpegTask.Wait(100)) {
                             $averagePps = if ($averagePps -eq 0.0) {
                                 $currentPps
                             } else {
-                                ($currentPps * 0.1) + ($averagePps * (1 - 0.1))
+                                ($currentPps * $alpha) + ($averagePps * (1 - $alpha))
                             }
 
                             if ($pps -gt 0) {
@@ -139,7 +127,7 @@ while (-not $ffmpegTask.Wait(100)) {
                     $viewModel.WindowTitle = "$($progressRecord.PercentComplete)% $taskName"
 
                     if ($StartPaused) {
-                        [HelperClasses.ConsoleHelper]::Info("The process started in paused state")
+                        [ConsoleHelper]::Info("The process started in paused state")
                         $StartPaused = $false
                         $viewModel.BusyMessage = "On pause."
                         $viewModel.ProcessControlCommand.Execute($true)
@@ -182,7 +170,7 @@ while (-not $ffmpegTask.Wait(100)) {
 
                         $viewModel.BusyMessage = "Errors detected : $message"
                         $viewModel.Busy = $true
-                        [HelperClasses.ConsoleHelper]::Error($data)
+                        [ConsoleHelper]::Error($data)
 
                     } elseif (([Regex]::Match($data, $failedPattern, $regexOpt).Success) -and ($isLastError -eq $false)) {
 
@@ -195,10 +183,10 @@ while (-not $ffmpegTask.Wait(100)) {
 
                         $viewModel.BusyMessage = $message
                         $viewModel.Busy = $true
-                        [HelperClasses.ConsoleHelper]::Error($data)
+                        [ConsoleHelper]::Error($data)
 
                     } else {
-                        [HelperClasses.ConsoleHelper]::WriteLine($data)
+                        [ConsoleHelper]::WriteLine($data)
                     }
                 }
                 break
@@ -227,8 +215,8 @@ while (-not $ffmpegTask.Wait(100)) {
 
                 if (($syncData.duration -ne 0) -and ($syncData.framerateDen -ne 0) -and ($syncData.framerateNum -ne 0)) {
 
-                    [HelperClasses.ConsoleHelper]::Log("Duration : $($syncData.duration)")
-                    [HelperClasses.ConsoleHelper]::Log("Frame Rate : $($syncData.framerateNum) / $($syncData.framerateDen)")
+                    [ConsoleHelper]::Log("Duration : $($syncData.duration)")
+                    [ConsoleHelper]::Log("Frame Rate : $($syncData.framerateNum) / $($syncData.framerateDen)")
                     $syncData.totalFrames = ($syncData.framerateNum / $syncData.framerateDen) * $syncData.duration
                 }
             }
@@ -239,7 +227,7 @@ while (-not $ffmpegTask.Wait(100)) {
 $syncData.exitCode = $ffmpegTask.GetAwaiter().GetResult()
 $ffmpegProcess.Dispose()
 
-[HelperClasses.ConsoleHelper]::Log("FFMPEG EXIT CODE : $($syncData.exitCode)")
+[ConsoleHelper]::Log("FFMPEG EXIT CODE : $($syncData.exitCode)")
 
 if (($syncData.exitCode -eq 0) -and ($syncData.termination -eq $false)) {
     
@@ -261,14 +249,14 @@ if (($viewModel.AutoClose -eq $true) -or ($syncData.termination -eq $true)) {
     Start-Sleep 1
     $closing = $progressWindow.Close()
     if (-not ($closing.Wait(1000))) {
-        [HelperClasses.ConsoleHelper]::Log("Lost control of the GUI window.", 1)
+        [ConsoleHelper]::Log("Lost control of the GUI window.", 1)
         $syncData.exitCode = 1003
     }
 }
 
 foreach ($e in $Error) {
     if ($e.Exception -isnot [System.OperationCanceledException]) {
-        [HelperClasses.ConsoleHelper]::Error($e, 1)
+        [ConsoleHelper]::Error($e, 1)
         $syncData.exitCode = 1
     }
 }

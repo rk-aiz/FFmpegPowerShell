@@ -110,6 +110,7 @@ $SHOW_CONSOLE_PROGRESSBAR = $false
 $ENABLE_ACTIVE_ANIMATION = $true
 $FFMPEG_FILE = "ffmpeg.exe"
 $FFPROBE_FILE = "ffprobe.exe"
+$RUNSPACE_SCRIPT = ".\ffmpeg_stderr.ps1"
 
 $NO_REDIRECT = $false
 
@@ -519,6 +520,9 @@ if ($Error.Count -gt 0) {
 # → ffmpeg をバックグラウンドのプロセスで実行する時は -nostdinオプションを追加する。Invalid data found when processing input対策？
 $ffmpegProcess = New-Object HelperClasses.ProcessInfo($FFMPEG_FILE, ("-y $($replacedParams.GetText(" "))"), $NO_REDIRECT)
 
+# CPU使用率上限設定
+$job = New-Object JobHelper.JobCpuWeightController 500
+
 $ffprobeParams = @(
     '-v error',
     '-select_streams v:0',
@@ -543,10 +547,23 @@ $syncData = [HashTable]::Synchronized(@{
     showConsoleProgress = $SHOW_CONSOLE_PROGRESSBAR
     termination = $false
     previousState = $null
+    job = $job
 })
 
 # Create ViewModel of progress window.
 $viewModel = New-Object ProgressWindow.ProgressViewModel
+
+$viewModel.CpuLimitChangeCommand = New-Object DelegateCommand {
+    param($param)
+
+    $newLimit = [int]($param)
+    if ($newLimit -ge 1 -and $newLimit -le 9) {
+        
+        #プロセスに上限を設定
+        $syncData.job.RequestWeight([int]($newLimit))
+        #[ConsoleHelper]::WriteLine("CPU Usage $($syncData.job.GetCpuUsage($true))")
+    }
+}
 
 # Create DelegateCommand for command bindings
 $processControlCommand = New-Object DelegateCommand
@@ -653,7 +670,7 @@ $Runspace.SessionStateProxy.setVariable("progressWindow", $progressWindow)
 $Runspace.SessionStateProxy.setVariable("syncData", $syncData)
 $Runspace.SessionStateProxy.setVariable("viewModel", $viewModel)
 
-$externalScript = Get-Command (Resolve-Path -LiteralPath ".\FormatFfmpegStdout.ps1")
+$externalScript = Get-Command (Resolve-Path -LiteralPath $RUNSPACE_SCRIPT)
 $PowerShell = [PowerShell]::Create()
 $PowerShell.AddCommand($externalScript).AddArgument($Host).AddArgument($TASK_NAME).AddArgument($StartPaused)
 $PowerShell.Runspace = $Runspace
@@ -679,6 +696,8 @@ try {
 } finally {
     $PowerShell.Dispose()
 }
+
+$syncData.job.Dispose()
 
 if (($syncData.exitCode -eq 0) -and (Test-Path -LiteralPath ($global:output)) ) {
     Start-Sleep 1
