@@ -124,8 +124,10 @@ namespace JobHelper
         }
 
         /// <summary>
-        /// クライアントから呼ぶ。頻繁に呼んでもOK。
+        /// Sets the desired CPU scheduling weight for the job.
+        /// This method is thread-safe and can be called frequently. The actual application of the weight is throttled internally.
         /// </summary>
+        /// <param name="weight">The scheduling weight, from 1 (least favored) to 9 (most favored).</param>
         public void RequestWeight(int weight)
         {
             if (weight < 1 || weight > 9)
@@ -182,6 +184,13 @@ namespace JobHelper
         /// Gets the average CPU usage of the job since the last call to this method.
         /// /// </summary>
         /// <returns>The CPU usage percentage. e.g., 50.0 means 50% of one core is being used.</returns>
+        /// </summary>
+        /// <param name="normalized">
+        /// If true, the usage is normalized by the number of processor cores, resulting in a value between 0 and 100,
+        /// similar to Task Manager. If false (default), the value can exceed 100 on multi-core systems, representing the
+        /// total core usage (e.g., 200.0 means two full cores were used).
+        /// </param>
+        /// <returns>The CPU usage percentage.</returns>
         public double GetCpuUsage(bool normalized = false)
         {
             NativeMethods.JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accountingInfo;
@@ -235,7 +244,6 @@ namespace JobHelper
         public void Dispose()
         {
             if (null != _timer) _timer.Dispose();
-            // ジョブオブジェクトのクローズ処理
             if (_hJob != IntPtr.Zero)
             {
                 NativeMethods.CloseHandle(_hJob);
@@ -244,7 +252,8 @@ namespace JobHelper
 
         static void ThrowLastError(string name)
         {
-            throw new Win32Exception(Marshal.GetLastWin32Error(), String.Format("{0} failed", name));
+            int error = Marshal.GetLastWin32Error();
+            throw new Win32Exception(error, String.Format("{0} failed with Win32 error code {1}.", name, error));
         }
     }
 }

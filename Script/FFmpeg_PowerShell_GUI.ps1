@@ -61,7 +61,9 @@ param(
     [Parameter()]
     [switch] $StartPaused,
     [Parameter()]
-    [switch] $ForceCompileAssembly = $false
+    [switch] $ForceCompileAssembly = $false,
+    [Parameter()]
+    [int] $ProcWeight = 5
 )
 
 Set-Location -LiteralPath $PSScriptRoot
@@ -374,7 +376,7 @@ $FORCE_COMPILE_ASSEMBLY = $false
 $REF_ASSEMBLIES = @(
     'System.Runtime.InteropServices'
 )
-$CLASS_NAME_TO_BE_VERIFIED = "JobHelper.CpuLimitedJob"
+$CLASS_NAME_TO_BE_VERIFIED = "JobHelper.JobCpuWeightController"
 Test-Assembly -sourcePath $CS_SOURCE -assemblyPath $CS_ASSEMBLY -refAssemblies $REF_ASSEMBLIES -classNameToBeVerified $CLASS_NAME_TO_BE_VERIFIED -forceCompileAssembly $FORCE_COMPILE_ASSEMBLY
 
 
@@ -647,6 +649,8 @@ $viewModel.OpenExplorer = $OPEN_FOLDER_ENCODED
 $viewModel.PreventSleep = $PREVENT_SLEEP
 $viewModel.EnableActiveAnimation = $ENABLE_ACTIVE_ANIMATION
 
+$viewModel.CpuRateLimit = $ProcWeight
+
 try{
     $progressWindow = New-Object ProgressWindow.MainWindow($viewModel)
     $progressWindow.Icon = $iconFrame
@@ -678,12 +682,7 @@ $PowerShell.Runspace = $Runspace
 $IASyncResult = $PowerShell.BeginInvoke()
 
 # Show WPF window
-$result = $false
-try{
-    $result = $progressWindow.ShowDialog();
-} catch {
-    $Error
-}
+$result = $progressWindow.ShowDialog();
 
 if (($Error.Count -gt 0) -or ($result -ne $true)) {
     $processExitCommand.Execute($null)
@@ -699,7 +698,7 @@ try {
 
 $syncData.job.Dispose()
 
-if (($syncData.exitCode -eq 0) -and (Test-Path -LiteralPath ($global:output)) ) {
+if (($syncData.exitCode -eq 0) -and (Test-Path -LiteralPath ($global:output)) -and ($Error.Count -eq 0)) {
     Start-Sleep 1
     exit 0
 } else {
